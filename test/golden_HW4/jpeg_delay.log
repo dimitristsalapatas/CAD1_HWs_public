@@ -1,7 +1,6 @@
 # Startpoint: u19/u14/u12/u5/Ti2_mul_input_reg_2_/CLK
 # Endpoint: u19/u14/u12/u5/Z_temp_52_reg_10_/D
 
-clk 0.0000000 0.0000000
 u19/u14/u12/u5/Ti2_mul_input_reg_2_/CLK 0.0000000 0.0000000
 u19/u14/u12/u5/Ti2_mul_input_reg_2_/Q 0.2392196 0.2392196
 u19/u14/u12/u5/U4351/A 0.0000000 0.2392196
