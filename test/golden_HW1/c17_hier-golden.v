@@ -1,9 +1,8 @@
-// Generated netlist by CADI API on Date: 2026-10-08 17:19:55 //
+// Generated netlist by CADI API on Date: 2026-10-13 10:58:36 //
 
 module c17_hier (N1, N2, N3, N22, N23);
 input N1, N2, N3;
 output N22, N23;
-wire n6, n7, n8, n9, out1, out2;
 
 sg13g2_nand2_1 U2 (.A(out2), .B(n9), .Y(N23));
 sg13g2_nor2b_1 U6 (.A(N2), .B_N(N1), .Y(n6));
@@ -17,7 +16,6 @@ endmodule
 module c18 (in1, in2, out, out2);
 input in1, in2;
 output out, out2;
-wire n4;
 
 sg13g2_inv_1 U862 (.A(in1), .Y(n4));
 sg13g2_a21oi_2 U863 (.A1(in1), .A2(in2), .B1(n4), .Y(out));
@@ -27,7 +25,6 @@ endmodule
 module c19 (in, out);
 input in;
 output out;
-wire n4;
 
 sg13g2_inv_1 U864 (.A(in), .Y(n4));
 c20 c20_inst(.in1(n4), .out1(out));
@@ -36,7 +33,6 @@ endmodule
 module c20 (in1, out1);
 input in1;
 output out1;
-wire n4;
 
 sg13g2_inv_1 U861 (.A(in1), .Y(n4));
 sg13g2_inv_1 U865 (.A(n4), .Y(out1));
