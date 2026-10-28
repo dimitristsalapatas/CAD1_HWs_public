@@ -13,7 +13,7 @@ Port *getPortFromFullName(Module *, string);
 
 void unit_test_structs();
 int create_data_structures();
-void getLUTDataFromTimingArc(LibTimingArc *, LUTType, long double **, int *, long double **, int *, long double **);
+void getLUTDataFromTimingArc(LibTimingArc *arc, LUTType type, long double **index_1, int *index1_size, long double **index_2, int *index2_size, long double **values);
 
 
 extern "C" {

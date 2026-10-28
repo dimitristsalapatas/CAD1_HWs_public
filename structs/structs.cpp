@@ -441,11 +441,17 @@ vector<LibTimingArc *> *getFromToTimingArcs(Pin *from_pin, Pin *to_pin) {
   return vec;
 }
 
-// return the input_slew, output_load, and values vectors of the LUT of the
-// specified arc and LUT type
+// return the two index vectors and the values vector of the LUT of the
+// specified arc and LUT type. The indices are returned in a fixed order,
+// regardless of the template's variable order:
+//   index_1: input_net_transition (delay LUTs) or
+//            constrained_pin_transition (constraint LUTs)
+//   index_2: total_output_net_capacitance (delay LUTs) or
+//            related_pin_transition (constraint LUTs)
+// values are always laid out in the template's order (variable_1 major).
 void getLUTDataFromTimingArc(LibTimingArc *arc, LUTType type,
-                             long double **input_slews, int *slews_size,
-                             long double **output_loads, int *loads_size,
+                             long double **index_1, int *index1_size,
+                             long double **index_2, int *index2_size,
                              long double **values) {
   // return if arc not specified
   if (!arc) {
@@ -463,36 +469,37 @@ void getLUTDataFromTimingArc(LibTimingArc *arc, LUTType type,
   LUTTemplate *lut_template = lut->getTemplate();
 
   // get var1 and var2
-  if (lut_template->getVar1() == INPUT_SLEW) {
+  if (lut_template->getVar1() == INPUT_SLEW ||
+      lut_template->getVar1() == CONSTRAINED_SLEW) {
     if (data->index_info[0]) {
-      *input_slews = data->index_info[0];
-      *slews_size = data->dim_sizes[0];
+      *index_1 = data->index_info[0];
+      *index1_size = data->dim_sizes[0];
     } else {
-      *input_slews = lut_template->getIndex1()->data();
-      *slews_size = lut_template->getIndex1()->size();
+      *index_1 = lut_template->getIndex1()->data();
+      *index1_size = lut_template->getIndex1()->size();
     }
     if (data->index_info[1]) {
-      *output_loads = data->index_info[1];
-      *loads_size = data->dim_sizes[1];
+      *index_2 = data->index_info[1];
+      *index2_size = data->dim_sizes[1];
     } else {
-      *output_loads = lut_template->getIndex2()->data();
-      *loads_size = lut_template->getIndex2()->size();
+      *index_2 = lut_template->getIndex2()->data();
+      *index2_size = lut_template->getIndex2()->size();
     }
   } else {
     if (data->index_info[0]) {
-      *output_loads = data->index_info[0];
-      *loads_size = data->dim_sizes[0];
+      *index_2 = data->index_info[0];
+      *index2_size = data->dim_sizes[0];
     } else {
-      *output_loads = lut_template->getIndex1()->data();
-      *loads_size = lut_template->getIndex1()->size();
+      *index_2 = lut_template->getIndex1()->data();
+      *index2_size = lut_template->getIndex1()->size();
     }
 
     if (data->index_info[1]) {
-      *input_slews = data->index_info[1];
-      *slews_size = data->dim_sizes[1];
+      *index_1 = data->index_info[1];
+      *index1_size = data->dim_sizes[1];
     } else {
-      *input_slews = lut_template->getIndex2()->data();
-      *slews_size = lut_template->getIndex2()->size();
+      *index_1 = lut_template->getIndex2()->data();
+      *index1_size = lut_template->getIndex2()->size();
     }
   }
 

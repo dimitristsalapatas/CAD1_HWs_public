@@ -9,7 +9,7 @@
 //
 // File:    lib.hpp
 // Purpose: data structures for library info
-// Authors: Stavros Simoglou, Dimitris Tsalapatasu
+// Authors: Stavros Simoglou, Dimitris Tsalapatas
 //
 #ifndef _LIB_HPP
 #define _LIB_HPP
@@ -22,28 +22,40 @@
 #include <fstream>
 #include <assert.h>
 #include <si2dr_liberty.h>
-#include <cstring>
-#include <boost/algorithm/string/split.hpp>
-#include <boost/algorithm/string/classification.hpp>
 
 using namespace std;
 
 typedef enum {NONE = 0, INPUT = 1, OUTPUT = 2, INOUT = 3} DirectionType;
 typedef enum {RISE = 0, FALL = 1} RFType;
 
-typedef enum {CELL_RISE       = 0,
-              CELL_FALL       = 1,
-              RISE_TRANSITION = 2,
-              FALL_TRANSITION = 3} LUTType;
+typedef enum {CELL_RISE       = 0x1,
+              CELL_FALL       = 0x2,
+              RISE_TRANSITION = 0x4,
+              FALL_TRANSITION = 0x8,
+              RISE_CONSTRAINT = 0x10,
+              FALL_CONSTRAINT = 0x20} LUTType;
 
 typedef enum {COMBINATIONAL      = 1,
               COMBINATIONAL_RISE = 2,
               COMBINATIONAL_FALL = 3,
               RISING_EDGE        = 4,
-              FALLING_EDGE       = 5} TimingType;
+              FALLING_EDGE       = 5,
+              CLEAR              = 6,
+              HOLD_FALLING       = 7,
+              HOLD_RISING        = 8,
+              MIN_PULSE_WIDTH    = 9,
+              NON_SEQ_HOLD_RISING  = 10,
+              NON_SEQ_SETUP_RISING = 11,
+              PRESET             = 12,
+              RECOVERY_FALLING   = 13,
+              RECOVERY_RISING    = 14,
+              REMOVAL_FALLING    = 15,
+              REMOVAL_RISING     = 16,
+              SETUP_FALLING      = 17,
+              SETUP_RISING       = 18} TimingType;
 
 typedef enum {POSITIVE_UNATE = 1, NEGATIVE_UNATE = 2, NON_UNATE = 3} TimingSense;
-typedef enum {INPUT_SLEW = 1, OUTPUT_LOAD = 2} LUTVariableType;
+typedef enum {INPUT_SLEW = 1, OUTPUT_LOAD = 2, CONSTRAINED_SLEW = 3, RELATED_SLEW = 4} LUTVariableType;
 typedef liberty_value_data LUTDataType;
 inline TimingType stringToTimingType(string type_str) {
   if (type_str == "combinational") {
@@ -56,6 +68,32 @@ inline TimingType stringToTimingType(string type_str) {
     return RISING_EDGE;
   } else if (type_str == "falling_edge") {
     return FALLING_EDGE;
+  } else if (type_str == "clear") {
+    return CLEAR;
+  } else if (type_str == "hold_falling") {
+    return HOLD_FALLING;
+  } else if (type_str == "hold_rising") {
+    return HOLD_RISING;
+  } else if (type_str == "min_pulse_width") {
+    return MIN_PULSE_WIDTH;
+  } else if (type_str == "non_seq_hold_rising") {
+    return NON_SEQ_HOLD_RISING;
+  } else if (type_str == "non_seq_setup_rising") {
+    return NON_SEQ_SETUP_RISING;
+  } else if (type_str == "preset") {
+    return PRESET;
+  } else if (type_str == "recovery_falling") {
+    return RECOVERY_FALLING;
+  } else if (type_str == "recovery_rising") {
+    return RECOVERY_RISING;
+  } else if (type_str == "removal_falling") {
+    return REMOVAL_FALLING;
+  } else if (type_str == "removal_rising") {
+    return REMOVAL_RISING;
+  } else if (type_str == "setup_falling") {
+    return SETUP_FALLING;
+  } else if (type_str == "setup_rising") {
+    return SETUP_RISING;
   } else {
     // default is combinational
     return (TimingType)COMBINATIONAL;
@@ -98,6 +136,32 @@ inline const char *timingTypeToString(TimingType type) {
     return "RISING_EDGE";
   case FALLING_EDGE:
     return "FALLING_EDGE";
+  case CLEAR:
+    return "CLEAR";
+  case HOLD_FALLING:
+    return "HOLD_FALLING";
+  case HOLD_RISING:
+    return "HOLD_RISING";
+  case MIN_PULSE_WIDTH:
+    return "MIN_PULSE_WIDTH";
+  case NON_SEQ_HOLD_RISING:
+    return "NON_SEQ_HOLD_RISING";
+  case NON_SEQ_SETUP_RISING:
+    return "NON_SEQ_SETUP_RISING";
+  case PRESET:
+    return "PRESET";
+  case RECOVERY_FALLING:
+    return "RECOVERY_FALLING";
+  case RECOVERY_RISING:
+    return "RECOVERY_RISING";
+  case REMOVAL_FALLING:
+    return "REMOVAL_FALLING";
+  case REMOVAL_RISING:
+    return "REMOVAL_RISING";
+  case SETUP_FALLING:
+    return "SETUP_FALLING";
+  case SETUP_RISING:
+    return "SETUP_RISING";
   default:
     return "NONE";
   }
@@ -121,6 +185,10 @@ inline LUTVariableType stringToLUTVariableType(string var_type_str) {
     return INPUT_SLEW;
   } else if (var_type_str == "total_output_net_capacitance") {
     return OUTPUT_LOAD;
+  } else if (var_type_str == "constrained_pin_transition") {
+    return CONSTRAINED_SLEW;
+  } else if (var_type_str == "related_pin_transition") {
+    return RELATED_SLEW;
   } else {
     return (LUTVariableType)NONE;
   }
@@ -132,6 +200,10 @@ inline const char *LUTVariableTypeToString(LUTVariableType var_type) {
     return "input_net_transition";
   case OUTPUT_LOAD:
     return "total_output_net_capacitance";
+  case CONSTRAINED_SLEW:
+    return "constrained_pin_transition";
+  case RELATED_SLEW:
+    return "related_pin_transition";
   default:
     return "NONE";
   }
@@ -147,11 +219,44 @@ inline const char *LUTTypeToString(LUTType type) {
     return "rise_transition";
   case FALL_TRANSITION:
     return "fall_transition";
+  case RISE_CONSTRAINT:
+    return "rise_constraint";
+  case FALL_CONSTRAINT:
+    return "fall_constraint";
   default:
     return "NONE";
   }
 }
 
+inline LUTType stringToLUTType(string type_str) {
+  if (type_str == "cell_rise") {
+    return CELL_RISE;
+  } else if (type_str == "cell_fall") {
+    return CELL_FALL;
+  } else if (type_str == "rise_transition") {
+    return RISE_TRANSITION;
+  } else if (type_str == "fall_transition") {
+    return FALL_TRANSITION;
+  } else if (type_str == "rise_constraint") {
+    return RISE_CONSTRAINT;
+  } else if (type_str == "fall_constraint") {
+    return FALL_CONSTRAINT;
+  } else {
+    return (LUTType) NONE;
+  }
+}
+
+inline bool isConstraint(LUTType type) {
+  return type & (RISE_CONSTRAINT | FALL_CONSTRAINT);
+}
+
+inline bool isDelay(LUTType type) {
+  return type & (CELL_RISE | CELL_FALL);
+}
+
+inline bool isSlew(LUTType type) {
+  return type & (RISE_TRANSITION | FALL_TRANSITION);
+}
 
 class Lib;
 class LibCell;
@@ -162,45 +267,48 @@ typedef struct FF_GROUP {
   LibPin *clocked_on_pin;
   LibPin *preset_pin;
   LibPin *clear_pin;
-} ff_group;  
+} ff_group;
 
 class LUTTemplate {
-  public:
-    LUTTemplate(string name) {
-      m_name = name;
+public:
+  LUTTemplate(string name) {
+    m_name = name;
+    m_variable1 = (LUTVariableType)NONE;
+    m_variable2 = (LUTVariableType)NONE;
+  }
+  string &getName() {
+    return m_name;
+  }
+
+  void setVar1(LUTVariableType var) { m_variable1 = var; }
+  void setVar2(LUTVariableType var) { m_variable2 = var; }
+  vector<long double> *getIndex1() { return &m_index1; }
+  vector<long double> *getIndex2() { return &m_index2; }
+  LUTVariableType getVar1() { return m_variable1; }
+  LUTVariableType getVar2() { return m_variable2; }
+  void print() {
+    cout << "Template: " << m_name << endl;
+    cout << "Variable_1: " << LUTVariableTypeToString(m_variable1) << endl;
+    cout << "Variable_2: " << LUTVariableTypeToString(m_variable2) << endl;
+    cout << "Index_1: ";
+    for (auto val : m_index1) {
+      cout << val << ", ";
     }
-    string &getName() {
-      return m_name;
+    cout << endl << "Index_2: ";
+    for (auto val : m_index2) {
+      cout << val << ", ";
     }
-  
-    void setVar1(LUTVariableType var) { m_variable1 = var; }
-    void setVar2(LUTVariableType var) { m_variable2 = var; }
-    vector<long double> *getIndex1() { return &m_index1; }
-    vector<long double> *getIndex2() { return &m_index2; }
-    LUTVariableType getVar1() { return m_variable1; }
-    LUTVariableType getVar2() { return m_variable2; }
-    void print() {
-      cout << "Template: " << m_name << endl;
-      cout << "Variable_1: " << LUTVariableTypeToString(m_variable1) << endl;
-      cout << "Variable_2: " << LUTVariableTypeToString(m_variable2) << endl;
-      cout << "Index_1: ";
-      for (auto val : m_index1) {
-        cout << val << ", ";
-      }
-      cout << endl << "Index_2: ";
-      for (auto val : m_index2) {
-        cout << val << ", ";
-      }
-      cout << endl;
-    }
-  
-  private:
-    LUTVariableType m_variable1;
-    LUTVariableType m_variable2;
-    vector<long double> m_index1; // long double is the default index type in lib parser
-    vector<long double> m_index2; // long double is the default index type in lib parser
-    string m_name;
-  };
+    cout << endl;
+  }
+
+private:
+  LUTVariableType m_variable1;
+  LUTVariableType m_variable2;
+  vector<long double> m_index1; // long double is the default index type in lib parser
+  vector<long double> m_index2; // long double is the default index type in lib parser
+  string m_name;
+};
+
 
 class LUT {
 public:
@@ -235,11 +343,11 @@ public:
   LibTimingArc(LibPin *from_pin, LibPin *to_pin) {
     m_from_pin = from_pin;
     m_to_pin = to_pin;
+    m_timing_type = COMBINATIONAL;
+    m_timing_sense = (TimingSense)NONE;
   }
 
-  LibTimingArc(LibPin *to_pin) {
-    m_to_pin = to_pin;
-  }
+  LibTimingArc(LibPin *to_pin) : LibTimingArc(nullptr, to_pin) {}
 
   void insertFromPin(LibPin *from_pin) { m_from_pin = from_pin; }
   void insertToPin(LibPin *to_pin) { m_to_pin = to_pin; }
@@ -254,19 +362,10 @@ public:
     }
   }
 
-  // assignment operator
-  LibTimingArc &operator=(const LibTimingArc &rhs) {
-    m_from_pin     = rhs.m_from_pin; // related_pin
-    m_to_pin       = rhs.m_to_pin;
-    m_timing_type  = rhs.m_timing_type;
-    m_timing_sense = rhs.m_timing_sense;
-    m_when         = rhs.m_when;
-    m_LUTs         = rhs.m_LUTs;
-    return *this;
-  }
-
-  // copy constructor
-  LibTimingArc(const LibTimingArc &rhs) { *this = rhs; }
+  // not copyable: the arc owns its LUTs, a shallow copy would delete
+  // them twice
+  LibTimingArc &operator=(const LibTimingArc &rhs) = delete;
+  LibTimingArc(const LibTimingArc &rhs) = delete;
 
   void print();
 
@@ -286,8 +385,13 @@ public:
   }
   // getters
   LibPin *getFromPin() { return m_from_pin; }
+  LibPin *getToPin() { return m_to_pin; }
 
   TimingType getTimingType() { return m_timing_type; }
+
+  TimingSense getTimingSense() { return m_timing_sense; }
+
+  const string &getWhen() { return m_when; }
 
 private:
   LibPin     *m_from_pin; // related_pin
@@ -299,6 +403,7 @@ private:
 };
 
 typedef struct InputTimingInfo_s {
+  vector<LibTimingArc *> constraint_arcs;
   float capacitance_min[2]; // indexed by RFType
   float capacitance_max[2]; // indexed by RFType
 } InputTimingInfo;
@@ -334,39 +439,36 @@ public:
     m_type = iotype;
 
     // allocate InputTimingInfo type if pin is input
+    // (new, not calloc: the structs hold vectors/strings)
     if (iotype == INPUT) {
-
-      m_t_info.in_tinfo =
-          (InputTimingInfo *)calloc(1, sizeof(InputTimingInfo));
+      m_t_info.in_tinfo = new InputTimingInfo();
     } else { // likewise for OutputTimingInfo
-      m_t_info.out_tinfo =
-          (OutputTimingInfo *)calloc(1, sizeof(OutputTimingInfo));
+      m_t_info.out_tinfo = new OutputTimingInfo();
     }
 
     return m_t_info;
   }
 
   TimingInfo *getTimingInfo() { return &m_t_info; }
-  void clearOutputTimingInfo(OutputTimingInfo *o_tinfo) {
-    if (o_tinfo == nullptr) {
-      return;
-    }
-    for (auto arc : o_tinfo->timing_arcs) {
-      delete arc;
-    }
-  }
 
   void clearTimingInfo() {
     // clear if it exists
     if (m_type == INPUT) {
       if (m_t_info.in_tinfo) {
-        free(m_t_info.in_tinfo);
+        for (auto arc : m_t_info.in_tinfo->constraint_arcs) {
+          delete arc;
+        }
+        delete m_t_info.in_tinfo;
         m_t_info.in_tinfo = nullptr;
       }
     } else {
-      clearOutputTimingInfo(m_t_info.out_tinfo);
-      free(m_t_info.out_tinfo);
-      m_t_info.out_tinfo = nullptr;
+      if (m_t_info.out_tinfo) {
+        for (auto arc : m_t_info.out_tinfo->timing_arcs) {
+          delete arc;
+        }
+        delete m_t_info.out_tinfo;
+        m_t_info.out_tinfo = nullptr;
+      }
     }
   }
   const string &getName() { return *m_name; }
@@ -389,6 +491,9 @@ public:
     cout << "\t\tfall_capacitance_range: "
          << m_t_info.in_tinfo->capacitance_min[FALL] << ", "
          << m_t_info.in_tinfo->capacitance_max[FALL] << endl;
+    for (auto arc : m_t_info.in_tinfo->constraint_arcs) {
+      arc->print();
+    }
   }
   void printOutputTimingInfo() {
     cout << "\t\tfunction: " << m_t_info.out_tinfo->function << endl;
@@ -494,6 +599,17 @@ public:
   Lib(string name) {
     m_name = name;
   }
+  ~Lib() {
+    for (auto entry : m_cells) {
+      delete entry.second;
+    }
+    for (auto entry : m_templates) {
+      delete entry.second;
+    }
+  }
+  // not copyable: the library owns its cells and templates
+  Lib(const Lib &) = delete;
+  Lib &operator=(const Lib &) = delete;
 
   void set_time_unit(float time_unit) { m_time_unit = time_unit; }
   void set_cap_unit(float cap_unit) { m_cap_unit = cap_unit; }
@@ -508,10 +624,14 @@ public:
     m_templates[name] = lut_template;
   }
   LibCell *getCellByName(string cell_name) {
-    return m_cells[cell_name];
+    // find, not operator[]: m_cells is keyed by string_view, so inserting
+    // a missing name would store a view of this temporary string
+    auto iter = m_cells.find(cell_name);
+    return iter != m_cells.end() ? iter->second : nullptr;
   }
   LUTTemplate *getTemplateByName(string template_name) {
-    return m_templates[template_name];
+    auto iter = m_templates.find(template_name);
+    return iter != m_templates.end() ? iter->second : nullptr;
   }
   void print() {
     cout << "Library: " << m_name << endl;

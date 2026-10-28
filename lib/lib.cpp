@@ -13,14 +13,19 @@
 //
 
 #include <lib.hpp>
+#include <cstring>
+#include <boost/algorithm/string/split.hpp>
+#include <boost/algorithm/string/classification.hpp>
 
 using namespace std;
 
 void LibTimingArc::print() {
   cout << "\t\t\ttiming() " << endl;
-  cout << "\t\t\t\trelated_pin: " << m_from_pin->getName() << endl;
+  cout << "\t\t\t\trelated_pin: "
+       << (m_from_pin ? m_from_pin->getName() : "NONE") << endl;
   cout << "\t\t\t\ttiming_type: " << timingTypeToString(m_timing_type) << endl;
-  cout << "\t\t\t\ttiming_sense: " << timingSenseToString(m_timing_sense) << endl;
+  cout << "\t\t\t\ttiming_sense: " << timingSenseToString(m_timing_sense)
+       << endl;
   cout << "\t\t\t\twhen: " << m_when << endl;
   for (auto lut : m_LUTs) {
     lut->print();
@@ -29,6 +34,7 @@ void LibTimingArc::print() {
 
 int parse_liberty(string libfile_path, Lib **library)
 {
+
     si2drErrorT err;
     si2drGroupsIdT groups;
     si2drGroupIdT group;
@@ -102,7 +108,7 @@ int parse_liberty(string libfile_path, Lib **library)
         si2drAttrsIdT library_attrs = si2drGroupGetAttrs(library_group, &err);
         si2drAttrIdT library_attr;
         while( !si2drObjectIsNull((library_attr=si2drIterNextAttr(library_attrs, &err)), &err)) {
-            string library_attr_name = si2drAttrGetName(library_attr, &err);
+            std::string library_attr_name = si2drAttrGetName(library_attr, &err);
 
             float unit = 0.0;
             if (library_attr_name == "time_unit") {
@@ -131,7 +137,7 @@ int parse_liberty(string libfile_path, Lib **library)
               si2drIterNextComplexValue(cap_values, &type, &int_val,
                                         &double_val, &string_val, &bool_val,
                                         &expr, &err);
-              string unit_name = string_val;
+              std::string unit_name = string_val;
               si2drIterQuit(cap_values, &err);
 
               if (unit_name == "ff") {
@@ -215,26 +221,31 @@ int parse_liberty(string libfile_path, Lib **library)
                   si2drIterQuit(index_values, &err);
                 }
 
-                // skip unsupported variable types (non delay LUTs)
-                if (lut_template->getVar1() == (LUTVariableType)NONE ||
-                    lut_template->getVar2() == (LUTVariableType)NONE) {
-                  continue;
-                }
-
-
-                (*library)->insertTemplate(cell_group_name, lut_template);
               }
               si2drIterQuit(template_attrs, &err);
+
+              // skip unsupported variable types (non delay LUTs)
+              if (lut_template->getVar1() == (LUTVariableType)NONE ||
+                  lut_template->getVar2() == (LUTVariableType)NONE) {
+                cout << "Skipping Template " << lut_template->getName() << endl;
+                delete lut_template;
+                continue;
+              }
+
+
+              (*library)->insertTemplate(cell_group_name, lut_template);
+
             }
 
             // skip non "cell" group types
             if (strcmp(cell_group_type, "cell")) {
-                continue;
+              continue;
             }
 
             // get name of lib cell
             si2drNamesIdT cell_group_names = si2drGroupGetNames(cell_group, &err);
-            string cell_group_name = string((char *) si2drIterNextName(cell_group_names, &err));
+            string cell_group_name =
+                string((char *)si2drIterNextName(cell_group_names, &err));
             si2drIterQuit(cell_group_names, &err);
 
             // insert lib cell into library
@@ -271,12 +282,12 @@ int parse_liberty(string libfile_path, Lib **library)
               bool skip_pin = false;
               while (!si2drObjectIsNull(
                   (pin_attr = si2drIterNextAttr(pin_attrs, &err)), &err)) {
-                string pin_attr_name = si2drAttrGetName(pin_attr, &err);
+                std::string pin_attr_name = si2drAttrGetName(pin_attr, &err);
 
                 // look for direction; for the purposes of the course
                 // direction must be defined before all other pin info
                 if (pin_attr_name == "direction") {
-                  string direction_str =
+                  std::string direction_str =
                       si2drSimpleAttrGetStringValue(pin_attr, &err);
 
                   if (direction_str != "input" && direction_str != "output") {
@@ -307,72 +318,50 @@ int parse_liberty(string libfile_path, Lib **library)
                   si2drGroupGetGroupType(pin_group, &err);
               // printf("   confirm: pin type = %s\n", pin_group_type);
 
+              // sequential cell: store its clock/preset/clear pins
               if (strcmp(pin_group_type, "ff") == 0) {
 
-                cell->m_ff_group = (ff_group *) calloc(1, sizeof(ff_group));
-                cell->m_ff_group->clocked_on_pin = nullptr;
-                cell->m_ff_group->preset_pin = nullptr;
-                cell->m_ff_group->clear_pin = nullptr;
+                if (!cell->m_ff_group) {
+                  cell->m_ff_group = (ff_group *) calloc(1, sizeof(ff_group));
+                }
 
-                si2drNamesIdT pin_group_names =
-                  si2drGroupGetNames(pin_group, &err);
-                si2drIterQuit(pin_group_names, &err);
-
-                si2drAttrsIdT pin_attrs = si2drGroupGetAttrs(pin_group, &err);
-                si2drAttrIdT pin_attr;
+                si2drAttrsIdT ff_attrs = si2drGroupGetAttrs(pin_group, &err);
+                si2drAttrIdT ff_attr;
 
                 while (!si2drObjectIsNull(
-                  (pin_attr = si2drIterNextAttr(pin_attrs, &err)), &err)) {
-                    string pin_attr_name = si2drAttrGetName(pin_attr, &err);
-                    if (pin_attr_name == "clocked_on") {
-                      si2drStringT clocked_on_pin_name =
-                        si2drSimpleAttrGetStringValue(pin_attr, &err);
-
-                      printf("clocked pin name = %s\n", clocked_on_pin_name);
-                      LibPin *clock_pin = cell->getPin(string(clocked_on_pin_name));
-                      if (clock_pin) {
-                        cell->m_ff_group->clocked_on_pin = clock_pin;
-                      }
+                  (ff_attr = si2drIterNextAttr(ff_attrs, &err)), &err)) {
+                    std::string ff_attr_name = si2drAttrGetName(ff_attr, &err);
+                    if (ff_attr_name != "clocked_on" &&
+                        ff_attr_name != "preset" &&
+                        ff_attr_name != "clear") {
+                      continue;
                     }
-                    else if (pin_attr_name == "preset") {
-                      si2drStringT preset_pin_name =
-                        si2drSimpleAttrGetStringValue(pin_attr, &err);
 
-                      printf("preset pin name = %s\n", preset_pin_name);
-
-                      string preset_pin_name_str = string(preset_pin_name);
-                      if (preset_pin_name_str.back() == '\'') {
-                        preset_pin_name_str.pop_back();
-                      }
-
-                      LibPin *preset_pin = cell->getPin(preset_pin_name_str);
-                      if (preset_pin) {
-                        cell->m_ff_group->preset_pin = preset_pin;
-                      }
+                    // strip the inversion mark, e.g. clear : "RESET_B'"
+                    std::string ff_pin_name =
+                      si2drSimpleAttrGetStringValue(ff_attr, &err);
+                    if (!ff_pin_name.empty() && ff_pin_name.back() == '\'') {
+                      ff_pin_name.pop_back();
                     }
-                    else if (pin_attr_name == "clear") {
-                      si2drStringT clear_pin_name =
-                        si2drSimpleAttrGetStringValue(pin_attr, &err);
+                    LibPin *ff_pin = cell->getPin(ff_pin_name);
 
-                      printf("clear pin name = %s\n", clear_pin_name);
-                      string clear_pin_name_str = string(clear_pin_name);
-                      if (clear_pin_name_str.back() == '\'') {
-                        clear_pin_name_str.pop_back();
-                      }
-                      LibPin *clear_pin = cell->getPin(clear_pin_name_str);
-                      if (clear_pin) {
-                        cell->m_ff_group->clear_pin = clear_pin;
-                      }
+                    if (ff_attr_name == "clocked_on") {
+                      cell->m_ff_group->clocked_on_pin = ff_pin;
+                    } else if (ff_attr_name == "preset") {
+                      cell->m_ff_group->preset_pin = ff_pin;
+                    } else {
+                      cell->m_ff_group->clear_pin = ff_pin;
                     }
                   }
-                si2drIterQuit(pin_attrs, &err);
+                si2drIterQuit(ff_attrs, &err);
+                continue;
               }
+
               // skip if not a "pin"
               // i.e. we don't process pg_pin, leakage_power, etc.
               if (strcmp(pin_group_type, "pin")) {
                 continue;
               }
-
 
               // get lib pin name
               si2drNamesIdT pin_group_names =
@@ -394,12 +383,12 @@ int parse_liberty(string libfile_path, Lib **library)
               float rise_cap = 0.0, fall_cap = 0.0;
               while (!si2drObjectIsNull(
                   (pin_attr = si2drIterNextAttr(pin_attrs, &err)), &err)) {
-                string pin_attr_name = si2drAttrGetName(pin_attr, &err);
+                std::string pin_attr_name = si2drAttrGetName(pin_attr, &err);
 
                 // look for direction; for the purposes of the course
                 // direction must be defined before all other pin info
                 if (pin_attr_name == "direction") {
-                  string direction_str =
+                  std::string direction_str =
                       si2drSimpleAttrGetStringValue(pin_attr, &err);
 
                   if (direction_str == "input") {
@@ -506,8 +495,6 @@ int parse_liberty(string libfile_path, Lib **library)
                 } else {
                   // get function
                   if (pin_attr_name == "function") {
-                    si2drStringT str = si2drSimpleAttrGetStringValue(pin_attr, &err);
-                    cout << "Pin function: " << str << endl;
                     t_info->out_tinfo->function =
                         si2drSimpleAttrGetStringValue(pin_attr, &err);
                   }
@@ -515,8 +502,7 @@ int parse_liberty(string libfile_path, Lib **library)
               }
               si2drIterQuit(pin_attrs, &err);
 
-              if (direction == OUTPUT) { // OUTPUT
-
+              // timing arcs: delay arcs on outputs, constraint arcs on inputs
                 TimingInfo *t_info = pin->getTimingInfo();
 
 
@@ -542,26 +528,25 @@ int parse_liberty(string libfile_path, Lib **library)
                   // confirm: arc template name = %s\n", arc_group_name);
 
                   // skip non timing arc groups
-                  if (strcmp(arc_group_type, "timing")) {
+                  if (!arc_group_type || strcmp(arc_group_type, "timing")) {
                     continue;
                   }
 
                   // define arc variable for use
 
                   // process all timing group attributes
-                  string related_pin_str;
+                  std::string related_pin_str;
                   // default timing_type is "combinational"
-                  string timing_type_str("combinational");
-                  string timing_sense_str;
+                  std::string timing_type_str("combinational");
+                  std::string timing_sense_str;
+                  std::string when_str;
 
                   si2drAttrsIdT attrs = si2drGroupGetAttrs(arc_group, &err);
                   si2drAttrIdT attr;
 
-                  string when_str;
-
                   while (!si2drObjectIsNull(
                       (attr = si2drIterNextAttr(attrs, &err)), &err)) {
-                    string name = si2drAttrGetName(attr, &err);
+                    std::string name = si2drAttrGetName(attr, &err);
 
                     // look for related_pin
                     if (name == "related_pin") {
@@ -575,7 +560,7 @@ int parse_liberty(string libfile_path, Lib **library)
                       timing_sense_str =
                           si2drSimpleAttrGetStringValue(attr, &err);
                     } else if (name == "when") {
-                      when_str = 
+                      when_str =
                           si2drSimpleAttrGetStringValue(attr, &err);
                     }
                   }
@@ -584,8 +569,17 @@ int parse_liberty(string libfile_path, Lib **library)
                   assert(!related_pin_str.empty() &&
                          "Undefined arc related pin ");
 
-                  LibTimingArc *arc =
-                      new LibTimingArc(cell->getPin(related_pin_str), pin);
+                  // skip arcs whose related pin was not stored (e.g. an
+                  // inout pin, or a multi-pin related_pin list)
+                  LibPin *related_pin = cell->getPin(related_pin_str);
+                  if (related_pin == nullptr) {
+                    cout << "Skipping arc " << related_pin_str << " -> "
+                         << pin->getName() << " of cell " << cell->getName()
+                         << ": related pin not found" << endl;
+                    continue;
+                  }
+
+                  LibTimingArc *arc = new LibTimingArc(related_pin, pin);
 
                   arc->insertTimingType(stringToTimingType(timing_type_str));
                   arc->insertTimingSense(stringToTimingSense(timing_sense_str));
@@ -599,6 +593,8 @@ int parse_liberty(string libfile_path, Lib **library)
                   LUTDataType *data;
                   LUT *lut;
                   LUTType type;
+                  bool has_luts = false;
+                  bool is_constraint_arc = false;
                   while (!si2drObjectIsNull(
                       (table_group = si2drIterNextGroup(table_groups, &err)),
                       &err)) {
@@ -612,40 +608,41 @@ int parse_liberty(string libfile_path, Lib **library)
                         si2drIterNextName(table_group_names, &err);
                     si2drIterQuit(table_group_names, &err);
 
-                    data = nullptr;
-                    // store NLDM tables
-                    if (!strcmp(table_group_type, "cell_rise")) {
-                      data = liberty_get_values_data(table_group);
-                      type = CELL_RISE;
-                    } else if (!strcmp(table_group_type, "cell_fall")) {
-                      data = liberty_get_values_data(table_group);
-                      type = CELL_FALL;
-                    } else if (!strcmp(table_group_type, "rise_transition")) {
-                      data = liberty_get_values_data(table_group);
-                      type = RISE_TRANSITION;
-                    } else if (!strcmp(table_group_type, "fall_transition")) {
-                      data = liberty_get_values_data(table_group);
-                      type = FALL_TRANSITION;
+                    // skip unsupported tables (e.g. power, ocv)
+                    type = stringToLUTType(table_group_type);
+                    if (type == (LUTType)NONE) {
+                      continue;
+                    }
+
+                    // skip tables whose template was not stored (e.g. scalar
+                    // or 1D templates)
+                    LUTTemplate *lut_template = (*library)->getTemplateByName(template_name);
+                    if (lut_template == nullptr) {
+                      continue;
                     }
 
                     // store NLDM table if found
+                    data = liberty_get_values_data(table_group);
                     if (data) {
-                      LUTTemplate *lut_template = (*library)->getTemplateByName(template_name);
                       lut = new LUT(type, data, lut_template);
                       arc->insertLUT(lut);
+                      has_luts = true;
+                      is_constraint_arc = isConstraint(type);
                     }
                   }
                   si2drIterQuit(table_groups, &err);
 
-                  // it is guaranteed the arc is a delay arc. Different
-                  // handling is needed for constraint delay arcs
-                  if (arc) {
-                    // cout << "tinfo " << t_info->out_tinfo << endl;
+                  // delay arcs belong to output pins, constraint arcs to
+                  // input (constrained) pins. Anything else is dropped.
+                  if (has_luts && !is_constraint_arc && direction == OUTPUT) {
                     t_info->out_tinfo->timing_arcs.push_back(arc);
+                  } else if (has_luts && is_constraint_arc && direction == INPUT) {
+                    t_info->in_tinfo->constraint_arcs.push_back(arc);
+                  } else {
+                    delete arc;
                   }
                 }
                 si2drIterQuit(arc_groups, &err);
-              }
             }
             si2drIterQuit(pin_groups, &err);
 

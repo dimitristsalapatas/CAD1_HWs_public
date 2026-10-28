@@ -37,6 +37,17 @@ int load_liberty(ClientData clientdata, Tcl_Interp *interp, int objc, Tcl_Obj *c
 
   libfilename = Tcl_GetString((Tcl_Obj *) objv[1]);
 
+  // replace a previously loaded library, unless a design already points
+  // into it (design cells keep LibCell pointers)
+  if (mainLibrary != nullptr) {
+    if (topModule != nullptr) {
+      Tcl_SetResult(interp, (char *)"Error. Cannot reload liberty after the design structures are created.", TCL_STATIC);
+      return TCL_ERROR;
+    }
+    delete mainLibrary;
+    mainLibrary = nullptr;
+  }
+
   int ret = parse_liberty(libfilename, &mainLibrary);
   if (mainLibrary == NULL) {
     Tcl_SetResult(interp, (char *)"Error parsing liberty file", TCL_STATIC);
@@ -45,6 +56,7 @@ int load_liberty(ClientData clientdata, Tcl_Interp *interp, int objc, Tcl_Obj *c
   mainLibrary->print();
   mainLibrary->write_lef_for_ASP("/tmp/asp.lef");
   tclwrapeval((char *)"load_lef /tmp/asp.lef");
+
   return ret;
 }
 
@@ -80,7 +92,12 @@ int run_unit_test(ClientData clientdata, Tcl_Interp *interp, int objc, Tcl_Obj *
 int get_cell_LUT(ClientData clientdata, Tcl_Interp *interp, int objc, Tcl_Obj *const* objv) {
 
   if (objc != 3) {
-    Tcl_SetResult(interp, (char *)"Usage: get_cell_LUT <cell_name> <lut_type: cell_rise, cell_fall, rise_transition, fall_transition>", TCL_STATIC);
+    Tcl_SetResult(interp, (char *)"Usage: get_cell_LUT <cell_name> <lut_type: cell_rise, cell_fall, rise_transition, fall_transition, rise_constraint, fall_constraint>", TCL_STATIC);
+    return TCL_ERROR;
+  }
+
+  if (mainLibrary == nullptr) {
+    Tcl_SetResult(interp, (char *)"Error. Main Library is not loaded.", TCL_STATIC);
     return TCL_ERROR;
   }
 
@@ -93,51 +110,60 @@ int get_cell_LUT(ClientData clientdata, Tcl_Interp *interp, int objc, Tcl_Obj *c
     return TCL_ERROR;
   }
 
-  LUTType lut_type;
-  if (strcmp(lut_type_str, "cell_rise") == 0) {
-    lut_type = CELL_RISE;
-  } 
-  else if (strcmp(lut_type_str, "cell_fall") == 0){
-    lut_type = CELL_FALL;
-  } 
-  else if (strcmp(lut_type_str, "rise_transition") == 0) {
-    lut_type = RISE_TRANSITION;
-  } 
-  else if (strcmp(lut_type_str, "fall_transition") == 0) {
-    lut_type = FALL_TRANSITION;
-  } 
-  else {
+  LUTType lut_type = stringToLUTType(lut_type_str);
+  if (lut_type == (LUTType)NONE) {
     Tcl_SetResult(interp, (char *)"Error. Unknown LUT type.", TCL_STATIC);
     return TCL_ERROR;
   }
-   
+
+  // delay/slew LUTs live on output pins, constraint LUTs on input pins
+  DirectionType pin_type = isConstraint(lut_type) ? INPUT : OUTPUT;
+
   for (auto pin : cell->getPins()) {
-    if (pin.second->getType() != OUTPUT) {
+    if (pin.second->getType() != pin_type) {
       continue;
     }
+    TimingInfo *t_info = pin.second->getTimingInfo();
+    vector<LibTimingArc *> &arcs = (pin_type == INPUT)
+                                       ? t_info->in_tinfo->constraint_arcs
+                                       : t_info->out_tinfo->timing_arcs;
+
     cout << "->Pin: " << pin.second->getName() << endl;
-    long double *input_slews = nullptr;
-    long double *output_loads = nullptr;
-    long double *values = nullptr;
-    int slews_size = 0;
-    int loads_size = 0;
-    for (auto arc : pin.second->getTimingInfo()->out_tinfo->timing_arcs) {
-      getLUTDataFromTimingArc(arc, lut_type, &input_slews, &slews_size,
-                              &output_loads, &loads_size, &values);
+    for (auto arc : arcs) {
+      LUT *lut = arc->getLUTByType(lut_type);
+      // not every arc has every table (e.g. clear arcs only have cell_fall)
+      if (!lut) {
+        continue;
+      }
+      long double *index_1 = nullptr;
+      long double *index_2 = nullptr;
+      long double *values = nullptr;
+      int index1_size = 0;
+      int index2_size = 0;
+      getLUTDataFromTimingArc(arc, lut_type, &index_1, &index1_size,
+                              &index_2, &index2_size, &values);
+
+      // getLUTDataFromTimingArc returns the slew axis first, whatever the
+      // template's variable order is
+      LUTVariableType var1 = lut->getTemplate()->getVar1();
+      LUTVariableType var2 = lut->getTemplate()->getVar2();
+      if (var1 != INPUT_SLEW && var1 != CONSTRAINED_SLEW) {
+        swap(var1, var2);
+      }
 
       arc->print();
-      cout << "slews: ";
-      for (int i = 0; i < slews_size; i++) {
-        cout << input_slews[i] << ", ";
+      cout << LUTVariableTypeToString(var1) << ": ";
+      for (int i = 0; i < index1_size; i++) {
+        cout << index_1[i] << ", ";
       }
       cout << endl;
-      cout << "loads: ";
-      for (int i = 0; i < loads_size; i++) {
-        cout << output_loads[i] << ", ";
+      cout << LUTVariableTypeToString(var2) << ": ";
+      for (int i = 0; i < index2_size; i++) {
+        cout << index_2[i] << ", ";
       }
       cout << endl;
       cout << "values: ";
-      for (int i = 0; i < loads_size*slews_size; i++) {
+      for (int i = 0; i < index1_size*index2_size; i++) {
         cout << values[i] << ", ";
       }
       cout << endl;
@@ -146,8 +172,6 @@ int get_cell_LUT(ClientData clientdata, Tcl_Interp *interp, int objc, Tcl_Obj *c
 
   return TCL_OK;
 }
-
-
 
 int main(int argc, char *argv[]) {
 
@@ -188,6 +212,6 @@ int main(int argc, char *argv[]) {
   start_console(arguments);
 
   cout << "Exiting CAD I Project." << endl;
-  
+
   return 1;
 }
