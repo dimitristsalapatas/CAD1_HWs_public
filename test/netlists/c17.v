@@ -15,5 +15,6 @@ module c17 ( N1, N2, N3, N6, N7, N22, N23 );
   sg13g2_inv_1 U8 ( .A(n8), .Y(N22) );
   sg13g2_a22oi_1 U9 ( .A1(N2), .A2(n6), .B1(N1), .B2(N3), .Y(n8) );
   sg13g2_nand2_1 U10 ( .A(N6), .B(N3), .Y(n6) );
+
 endmodule
 
