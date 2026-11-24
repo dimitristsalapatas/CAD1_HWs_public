@@ -1,6 +1,6 @@
-U1/L_LO constant 0
-state_1_reg[0]/SCD 0
-state_1_reg[0]/SCE 0
+U1/L_LO 0
+\state_1_reg[0]/SCD 0
+\state_1_reg[0]/SCE 0
 multiplier_16x16bit_pipelined/U351/L_HI 1
 multiplier_16x16bit_pipelined/layer_2_compressor42_7/U16/B 1
 multiplier_16x16bit_pipelined/layer_2_compressor42_7/U7/B 1
@@ -59,6 +59,7 @@ multiplier_16x16bit_pipelined/adder_32bit/operator_B_stage_1_1/U4/B1 0
 multiplier_16x16bit_pipelined/adder_32bit/operator_A_1/U4/Y 1
 multiplier_16x16bit_pipelined/adder_32bit/operator_A_1/U3/A 1
 multiplier_16x16bit_pipelined/adder_32bit/operator_A_1/U3/Y 0
+multiplier_16x16bit_pipelined/adder_32bit/operator_C_stage_6_0/U2/B1 0
 multiplier_16x16bit_pipelined/adder_32bit/operator_B_stage_1_1/U4/A1 0
 multiplier_16x16bit_pipelined/adder_32bit/operator_B_stage_1_1/U4/Y 1
 multiplier_16x16bit_pipelined/adder_32bit/operator_B_stage_1_1/U3/A 1
